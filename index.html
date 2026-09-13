@@ -127,6 +127,30 @@
   }
   ol.steps-list p{ margin:0; color:var(--ink-soft); }
   ol.steps-list strong{ color:var(--ink); font-family:'Sora',sans-serif; }
+  section.comments{ padding:44px 0; border-bottom:1px solid var(--line); }
+  section.comments h2{ font-size:1.5rem; margin-bottom:6px; }
+  section.comments .sub{ color:var(--ink-soft); margin-bottom:24px; max-width:58ch; }
+  .comment-form{ background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:20px; display:flex; flex-direction:column; gap:12px; margin-bottom:28px; }
+  .comment-form input, .comment-form textarea{
+    font-family:'Karla',sans-serif; font-size:0.95rem; color:var(--ink);
+    background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+    resize:vertical;
+  }
+  .comment-form textarea{ min-height:80px; }
+  .comment-form .hp{ position:absolute; left:-9999px; width:1px; height:1px; opacity:0; }
+  .comment-form button{
+    align-self:flex-start; font-family:'Sora',sans-serif; font-weight:700; color:#fff;
+    background:var(--blue); border:none; border-radius:10px; padding:10px 20px; cursor:pointer;
+  }
+  .comment-form button:disabled{ opacity:0.6; cursor:not-allowed; }
+  .comment-status{ font-size:0.85rem; color:var(--ink-soft); }
+  .comment-list{ display:flex; flex-direction:column; gap:12px; }
+  .comment{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+  .comment .who{ font-family:'Sora',sans-serif; font-weight:600; font-size:0.9rem; color:var(--blue-deep); }
+  .comment .when{ font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--ink-soft); margin-left:8px; }
+  .comment .msg{ margin:6px 0 0; color:var(--ink); font-size:0.92rem; white-space:pre-wrap; }
+  .comment-empty{ color:var(--ink-soft); font-size:0.9rem; }
+
   footer.foot{ padding-top:32px; color:var(--ink-soft); font-size:0.85rem; }
   @media (max-width:560px){
     .cta-row{ flex-direction:column; align-items:stretch; }
@@ -211,6 +235,23 @@
     </ol>
   </section>
 
+  <section class="comments">
+    <h2>Comentarios</h2>
+    <p class="sub">¿Ya la probaste? Cuéntanos qué te pareció o cómo te funcionó.</p>
+
+    <form class="comment-form" id="commentForm">
+      <input type="text" class="hp" name="website" tabindex="-1" autocomplete="off">
+      <input type="email" id="commentEmail" placeholder="Tu correo" required>
+      <textarea id="commentMessage" placeholder="Escribe tu comentario…" required></textarea>
+      <button type="submit" id="commentSubmit">Publicar comentario</button>
+      <span class="comment-status" id="commentStatus"></span>
+    </form>
+
+    <div class="comment-list" id="commentList">
+      <p class="comment-empty">Cargando comentarios…</p>
+    </div>
+  </section>
+
   <footer class="foot">
     <span>Link WISP Fresnel — hecha por Daniel</span>
   </footer>
@@ -219,7 +260,91 @@
 <script>
   (function () {
     var NS = "link-wisp-fresnel-lwf2026";
+    var COMMENTS_API = "https://link-wisp-fresnel-comments.vercel.app/api/comments";
     fetch("https://abacus.jasoncameron.dev/hit/" + NS + "/visits").catch(function () {});
+
+    function fmtDate(iso) {
+      try { return new Date(iso).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" }); }
+      catch (e) { return ""; }
+    }
+
+    function renderComments(list) {
+      var box = document.getElementById("commentList");
+      box.innerHTML = "";
+      if (!list.length) {
+        var empty = document.createElement("p");
+        empty.className = "comment-empty";
+        empty.textContent = "Todavía no hay comentarios. ¡Sé el primero!";
+        box.appendChild(empty);
+        return;
+      }
+      list.slice().reverse().forEach(function (c) {
+        var item = document.createElement("div");
+        item.className = "comment";
+
+        var who = document.createElement("span");
+        who.className = "who";
+        who.textContent = c.name || "Anónimo";
+
+        var when = document.createElement("span");
+        when.className = "when";
+        when.textContent = fmtDate(c.date);
+
+        var msg = document.createElement("p");
+        msg.className = "msg";
+        msg.textContent = c.message || "";
+
+        item.appendChild(who);
+        item.appendChild(when);
+        item.appendChild(msg);
+        box.appendChild(item);
+      });
+    }
+
+    function loadComments() {
+      fetch(COMMENTS_API)
+        .then(function (r) { return r.json(); })
+        .then(renderComments)
+        .catch(function () {
+          document.getElementById("commentList").innerHTML =
+            '<p class="comment-empty">No se pudieron cargar los comentarios ahora mismo.</p>';
+        });
+    }
+
+    var form = document.getElementById("commentForm");
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var submitBtn = document.getElementById("commentSubmit");
+      var status = document.getElementById("commentStatus");
+      var email = document.getElementById("commentEmail").value.trim();
+      var message = document.getElementById("commentMessage").value.trim();
+      var website = form.website.value;
+
+      if (!email || !message) return;
+
+      submitBtn.disabled = true;
+      status.textContent = "Publicando…";
+
+      fetch(COMMENTS_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: email, email: email, message: message, website: website }),
+      })
+        .then(function (r) { if (!r.ok) throw new Error("bad"); return r.json(); })
+        .then(function () {
+          status.textContent = "¡Gracias por tu comentario!";
+          document.getElementById("commentMessage").value = "";
+          loadComments();
+        })
+        .catch(function () {
+          status.textContent = "No se pudo publicar, intenta de nuevo.";
+        })
+        .finally(function () {
+          submitBtn.disabled = false;
+        });
+    });
+
+    loadComments();
 
     var btn = document.getElementById("downloadBtn");
     var label = document.getElementById("downloadBtnLabel");
