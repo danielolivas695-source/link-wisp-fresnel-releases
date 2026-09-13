@@ -334,7 +334,7 @@
         .then(function () {
           status.textContent = "¡Gracias por tu comentario!";
           document.getElementById("commentMessage").value = "";
-          loadComments();
+          setTimeout(loadComments, 900);
         })
         .catch(function () {
           status.textContent = "No se pudo publicar, intenta de nuevo.";
